@@ -1,4 +1,5 @@
 """Enhanced patch commands with history access"""
+from typing import Any, Dict
 import discord
 from discord.ext import commands
 import logging
@@ -468,6 +469,271 @@ class PatchCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error listing reports: {e}")
             await ctx.send("❌ Error retrieving report list")
+
+    @commands.command(name='patchreload')
+    async def patchreload_command(self, ctx, source: str = 'gl', index: int = 1):
+        """Re-analyze and regenerate patch report. Usage: !patchreload gl 2"""
+        
+        # Validate source
+        source_map = {
+            'gl': 'Global Labs',
+            'globallab': 'Global Labs', 
+            'global': 'Global Labs',
+            'ko': 'Korean Notice',
+            'korean': 'Korean Notice',
+            'kr': 'Korean Notice'
+        }
+        
+        if source.lower() not in source_map:
+            await ctx.send("❌ Invalid source. Use `gl` for Global Labs or `ko` for Korean notices.")
+            return
+        
+        if index < 1:
+            await ctx.send("❌ Index must be 1 or higher (1=latest, 2=second latest, etc.)")
+            return
+        
+        source_name = source_map[source.lower()]
+        
+        # Get the report to reload
+        report_info = self.db.get_report_by_index(source_name, index)
+        
+        if not report_info:
+            total_reports = self.db.count_reports(source_name)
+            await ctx.send(f"❌ No report found at position #{index} for {source_name}. Available: 1-{total_reports}")
+            return
+        
+        # Show processing message
+        processing_embed = discord.Embed(
+            title="🔄 Reanalyzing Patch Report",
+            description=f"**Source:** {source_name}\n**Position:** #{index}\n**Title:** {report_info['title'][:100]}...",
+            color=0xffaa00,
+            timestamp=ctx.message.created_at
+        )
+        processing_embed.add_field(
+            name="⏳ Status",
+            value="AI is re-analyzing the patch content...\nThis may take 10-30 seconds.",
+            inline=False
+        )
+        processing_embed.set_footer(text="BDO Patch Bot • Reanalysis in Progress")
+        
+        processing_msg = await ctx.send(embed=processing_embed)
+        
+        try:
+            # Regenerate the AI report using the original patch data
+            patch_data = report_info['patch_data']
+            new_report_filename = await self.ai_analyzer.generate_deep_report(patch_data)
+            
+            if not new_report_filename:
+                await processing_msg.edit(embed=discord.Embed(
+                    title="❌ Reanalysis Failed",
+                    description="Failed to regenerate the AI report. The patch content may no longer be accessible.",
+                    color=0xff0000
+                ))
+                return
+            
+            # Update database with new report
+            self.db.store_ai_report(patch_data, new_report_filename, source_name)
+            
+            # Send the new report file
+            await self._send_reanalyzed_report(ctx, new_report_filename, report_info, source_name, index)
+            
+            # Update the processing message to success
+            success_embed = discord.Embed(
+                title="✅ Reanalysis Complete",
+                description=f"**{source_name}** report #{index} has been successfully reanalyzed with updated AI insights.",
+                color=0x00ff00
+            )
+            success_embed.set_footer(text="New report sent above")
+            await processing_msg.edit(embed=success_embed)
+            
+            logger.info(f"Reanalyzed {source_name} report #{index} for {ctx.guild.name}")
+            
+        except Exception as e:
+            logger.error(f"Error in patchreload command: {e}")
+            await processing_msg.edit(embed=discord.Embed(
+                title="❌ Reanalysis Error",
+                description=f"An error occurred during reanalysis: {str(e)[:100]}...",
+                color=0xff0000
+            ))
+
+    async def _send_reanalyzed_report(self, ctx, filename: str, original_report: Dict[str, Any], source: str, index: int):
+        """Send the reanalyzed report file with enhanced embed"""
+        try:
+            report_path = os.path.join(self.ai_analyzer.reports_folder, filename)
+            
+            if not os.path.exists(report_path):
+                await ctx.send(f"❌ Reanalyzed report file not found: {filename}")
+                return
+            
+            # Create enhanced embed for reanalyzed report
+            embed = discord.Embed(
+                title=f"🔄 {source} - Reanalyzed Report (#{index})",
+                description=f"**{original_report['title'][:100]}...**",
+                color=0x00ff88 if 'Global' in source else 0xff6b35,
+                timestamp=ctx.message.created_at
+            )
+            
+            embed.add_field(
+                name="📋 Original Report Info",
+                value=(
+                    f"**Date:** {original_report['date']}\n"
+                    f"**Original Generated:** {original_report['generated_at'][:16]}\n"
+                    f"**Position:** #{index} of {self.db.count_reports(source)} total"
+                ),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🔄 Reanalysis Details",
+                value=(
+                    f"**Reanalyzed:** Just now\n"
+                    f"**New AI Insights:** Enhanced analysis with latest prompts\n"
+                    f"**Status:** ✅ Complete"
+                ),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🎯 Enhanced Analysis Includes",
+                value=(
+                    "• Updated strategic insights\n"
+                    "• Detailed Events, Classes, Items breakdown\n"
+                    "• Monster Zones & Technical changes\n"
+                    "• Expanded content analysis"
+                ),
+                inline=False
+            )
+            
+            # Get file size
+            file_size = os.path.getsize(report_path)
+            embed.add_field(
+                name="📄 File Info",
+                value=f"**Size:** {file_size:,} bytes\n**Format:** Plain Text (.txt)",
+                inline=True
+            )
+            
+            source_short = 'gl' if 'Global' in source else 'ko'
+            embed.add_field(
+                name="🔄 Commands",
+                value=f"`!patchreload {source_short} {index}` - Reanalyze again\n`!history {source_short}` - View all reports",
+                inline=True
+            )
+            
+            embed.set_footer(text="🔄 Reanalyzed Report • BDO Patch Bot")
+            
+            # Send file with embed
+            with open(report_path, 'rb') as f:
+                discord_file = discord.File(f, filename=filename)
+                message = await ctx.send(embed=embed, file=discord_file)
+            
+            # Add special reactions for reanalyzed reports
+            await message.add_reaction("🔄")  # Reload symbol
+            await message.add_reaction("📊")  # Analysis
+            await message.add_reaction("⭐")  # Star
+            
+        except Exception as e:
+            logger.error(f"Error sending reanalyzed report: {e}")
+            await ctx.send(f"❌ Error sending reanalyzed report: {str(e)[:100]}...")
+
+    @commands.command(name='bulkreload')
+    @commands.has_permissions(administrator=True)
+    async def bulkreload_command(self, ctx, source: str, start_index: int = 1, end_index: int = 3):
+        """Bulk reanalyze multiple reports. Usage: !bulkreload gl 1 5"""
+        
+        # Validate source
+        source_map = {
+            'gl': 'Global Labs',
+            'ko': 'Korean Notice',
+            'korean': 'Korean Notice',
+            'global': 'Global Labs'
+        }
+        
+        if source.lower() not in source_map:
+            await ctx.send("❌ Invalid source. Use `gl` or `ko`.")
+            return
+        
+        if start_index < 1 or end_index < start_index or (end_index - start_index) > 10:
+            await ctx.send("❌ Invalid range. Max 10 reports per bulk reload.")
+            return
+        
+        source_name = source_map[source.lower()]
+        total_reports = self.db.count_reports(source_name)
+        
+        if end_index > total_reports:
+            await ctx.send(f"❌ Only {total_reports} reports available for {source_name}.")
+            return
+        
+        # Confirmation embed
+        confirm_embed = discord.Embed(
+            title="⚠️ Bulk Reanalysis Confirmation",
+            description=f"You're about to reanalyze **{end_index - start_index + 1}** {source_name} reports (#{start_index} to #{end_index}).",
+            color=0xffaa00
+        )
+        confirm_embed.add_field(
+            name="💰 Estimated Cost",
+            value="This will use significant AI API calls. Continue?",
+            inline=False
+        )
+        confirm_embed.set_footer(text="React with ✅ to confirm or ❌ to cancel")
+        
+        confirm_msg = await ctx.send(embed=confirm_embed)
+        await confirm_msg.add_reaction("✅")
+        await confirm_msg.add_reaction("❌")
+        
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ['✅', '❌'] and reaction.message.id == confirm_msg.id
+        
+        try:
+            reaction, user = await self.bot.wait_for('reaction_add', timeout=30.0, check=check)
+            
+            if str(reaction.emoji) == '❌':
+                await confirm_msg.edit(embed=discord.Embed(
+                    title="❌ Bulk Reanalysis Cancelled",
+                    description="Operation cancelled by user.",
+                    color=0xff0000
+                ))
+                return
+                
+            # Start bulk processing
+            await confirm_msg.edit(embed=discord.Embed(
+                title="🔄 Bulk Reanalysis Started",
+                description=f"Processing {source_name} reports #{start_index} to #{end_index}...",
+                color=0x00ff88
+            ))
+            
+            success_count = 0
+            for i in range(start_index, end_index + 1):
+                try:
+                    report_info = self.db.get_report_by_index(source_name, i)
+                    if report_info:
+                        new_filename = await self.ai_analyzer.generate_deep_report(report_info['patch_data'])
+                        if new_filename:
+                            self.db.store_ai_report(report_info['patch_data'], new_filename, source_name)
+                            success_count += 1
+                            await ctx.send(f"✅ Reanalyzed report #{i}: {report_info['title'][:50]}...")
+                except Exception as e:
+                    await ctx.send(f"❌ Failed to reanalyze report #{i}: {str(e)[:50]}...")
+            
+            # Final summary
+            summary_embed = discord.Embed(
+                title="📊 Bulk Reanalysis Complete",
+                description=f"**Successfully reanalyzed:** {success_count}/{end_index - start_index + 1} reports",
+                color=0x00ff00 if success_count > 0 else 0xff0000
+            )
+            summary_embed.add_field(
+                name="📋 Next Steps",
+                value=f"Use `!latest {source.lower()}` to get the newest reports",
+                inline=False
+            )
+            await ctx.send(embed=summary_embed)
+            
+        except asyncio.TimeoutError:
+            await confirm_msg.edit(embed=discord.Embed(
+                title="⏰ Bulk Reanalysis Timeout",
+                description="No confirmation received within 30 seconds.",
+                color=0xff0000
+            ))
+
     
     @commands.command(name='help')
     async def help_command(self, ctx):
@@ -524,26 +790,39 @@ class PatchCommands(commands.Cog):
             name="⚙️ **Server Configuration Commands**",
             value=(
                 "`!usepatch` - Set current channel for patch notifications\n"
-                "`!bdolan <lang>` - Set translation language\n"
+                # "`!bdolan <lang>` - Set translation language\n"
                 "`!config` - Show current server configuration settings"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="📊 **Analysis & Reload Commands**",
+            value=(
+                "`!latest` - Get latest AI analysis reports from both sources\n"
+                "`!latest gl` - Get latest Global Labs intelligence report\n"
+                "`!latest ko` - Get latest Korean notice intelligence report\n"
+                "`!patchreload gl 2` - Re-analyze the 2nd latest Global Labs report\n"
+                "`!patchreload ko 1` - Re-analyze the latest Korean report\n"
+                "`!bulkreload gl 1 5` - Bulk reanalyze reports 1-5 (Admin only)"
             ),
             inline=False
         )
         
         # Language Options
-        embed.add_field(
-            name="🌐 **Supported Languages**",
-            value=(
-                "**Available for `!bdolan` command:**\n"
-                "• `en` - English (default)\n"
-                "• `ko` - Korean\n"
-                "• `es` - Spanish\n"
-                "• `fr` - French\n"
-                "• `de` - German\n"
-                "• `ja` - Japanese"
-            ),
-            inline=True
-        )
+        # embed.add_field(
+        #     name="🌐 **Supported Languages**",
+        #     value=(
+        #         "**Available for `!bdolan` command:**\n"
+        #         "• `en` - English (default)\n"
+        #         "• `ko` - Korean\n"
+        #         "• `es` - Spanish\n"
+        #         "• `fr` - French\n"
+        #         "• `de` - German\n"
+        #         "• `ja` - Japanese"
+        #     ),
+        #     inline=True
+        # )
         
         # Bot Features
         embed.add_field(
@@ -563,7 +842,8 @@ class PatchCommands(commands.Cog):
         embed.add_field(
             name="💡 **Quick Start Examples**",
             value=(
-                "**Setup:** `!usepatch` → `!bdolan en`\n"
+                # "**Setup:** `!usepatch` → `!bdolan en`\n"
+                "**Setup:** `!usepatch`\n"
                 "**Get Latest:** `!latest gl` or `!latest ko`\n"
                 "**Browse History:** `!history gl` → `!history gl 3`\n"
                 "**Check Status:** `!status`\n"

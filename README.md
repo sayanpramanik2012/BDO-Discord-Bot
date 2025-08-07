@@ -111,7 +111,7 @@ Stored in `/patch_reports/` for long-term reference.
 
 ---
 
-## 🌍 Supported Languages
+## 🌍 Supported Languages (Under Dev)
 
 Use `!bdolan <lang_code>` to set the language output:
 

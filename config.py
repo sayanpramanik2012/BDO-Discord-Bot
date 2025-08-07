@@ -13,7 +13,7 @@ class Config:
     
     # AI Configuration
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-    GEMINI_MODEL = 'gemini-2.0-flash'
+    GEMINI_MODEL = 'gemini-2.5-flash'
     
     # BDO URLs - Updated with your requested URLs
     KOREAN_NOTICE_URL = "https://www.kr.playblackdesert.com/ko-KR/News/Notice?boardType=2"

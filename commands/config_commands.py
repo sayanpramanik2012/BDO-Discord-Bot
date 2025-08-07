@@ -30,11 +30,11 @@ class ConfigCommands(commands.Cog):
                     color=0x00ff00
                 )
                 
-                embed.add_field(
-                    name="Next Steps",
-                    value="• Use `!bdolan en` to set language\n• Use `!config` to view settings\n• Bot will automatically check for patches every 15 minutes",
-                    inline=False
-                )
+                # embed.add_field(
+                #     name="Next Steps",
+                #     value="• Use `!bdolan en` to set language\n• Use `!config` to view settings\n• Bot will automatically check for patches every 15 minutes",
+                #     inline=False
+                # )
                 
                 await ctx.send(embed=embed)
                 logger.info(f"Patch channel set for guild {ctx.guild.id} to channel {ctx.channel.id}")
@@ -45,52 +45,52 @@ class ConfigCommands(commands.Cog):
             logger.error(f"Error in usepatch command: {e}")
             await ctx.send("❌ An error occurred. Please try again.")
     
-    @commands.command(name='bdolan')
-    async def set_language(self, ctx, language_code: str = 'en'):
-        """Set translation language"""
-        try:
-            from config import Config
+    # @commands.command(name='bdolan')
+    # async def set_language(self, ctx, language_code: str = 'en'):
+    #     """Set translation language"""
+    #     try:
+    #         from config import Config
             
-            if language_code not in Config.SUPPORTED_LANGUAGES:
-                embed = discord.Embed(
-                    title="❌ Invalid Language",
-                    description="Supported languages:",
-                    color=0xff0000
-                )
+    #         if language_code not in Config.SUPPORTED_LANGUAGES:
+    #             embed = discord.Embed(
+    #                 title="❌ Invalid Language",
+    #                 description="Supported languages:",
+    #                 color=0xff0000
+    #             )
                 
-                for code, name in Config.SUPPORTED_LANGUAGES.items():
-                    embed.add_field(
-                        name=f"`!bdolan {code}`",
-                        value=name,
-                        inline=True
-                    )
+    #             for code, name in Config.SUPPORTED_LANGUAGES.items():
+    #                 embed.add_field(
+    #                     name=f"`!bdolan {code}`",
+    #                     value=name,
+    #                     inline=True
+    #                 )
                 
-                await ctx.send(embed=embed)
-                return
+    #             await ctx.send(embed=embed)
+    #             return
             
-            success = self.db.set_language(ctx.guild.id, language_code)
+    #         success = self.db.set_language(ctx.guild.id, language_code)
             
-            if success:
-                language_name = Config.SUPPORTED_LANGUAGES[language_code]
-                embed = discord.Embed(
-                    title="🌐 Language Updated",
-                    description=f"Translation language set to: **{language_name}**",
-                    color=0x00ff00
-                )
+    #         if success:
+    #             language_name = Config.SUPPORTED_LANGUAGES[language_code]
+    #             embed = discord.Embed(
+    #                 title="🌐 Language Updated",
+    #                 description=f"Translation language set to: **{language_name}**",
+    #                 color=0x00ff00
+    #             )
                 
-                embed.add_field(
-                    name="Note",
-                    value="This affects all patch translations in this server.",
-                    inline=False
-                )
+    #             embed.add_field(
+    #                 name="Note",
+    #                 value="This affects all patch translations in this server.",
+    #                 inline=False
+    #             )
                 
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("❌ Failed to set language. Please try again.")
+    #             await ctx.send(embed=embed)
+    #         else:
+    #             await ctx.send("❌ Failed to set language. Please try again.")
                 
-        except Exception as e:
-            logger.error(f"Error in bdolan command: {e}")
-            await ctx.send("❌ An error occurred. Please try again.")
+    #     except Exception as e:
+    #         logger.error(f"Error in bdolan command: {e}")
+    #         await ctx.send("❌ An error occurred. Please try again.")
     
     @commands.command(name='config')
     async def show_config(self, ctx):
