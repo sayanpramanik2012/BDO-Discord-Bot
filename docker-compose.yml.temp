@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  bdo-bot:
+    image:{Image_Name}
+    container_name: bdo-discord-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - COMMAND_PREFIX=${COMMAND_PREFIX:-!}
+      - CHECK_INTERVAL_MINUTES=${CHECK_INTERVAL_MINUTES:-15}
+      - GLOBAL_LAB_URL=${GLOBAL_LAB_URL}
+      - KOREAN_NOTICE_URL=${KOREAN_NOTICE_URL}
+    volumes:
+      - ./data:/app/data
+      - ./patch_reports:/app/patch_reports
+      - ./logs:/app/logs
+    networks:
+      - bdo-bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sqlite3; sqlite3.connect('/app/bdo_bot.db').close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  bdo-bot-network:
+    driver: bridge
+
+volumes:
+  bdo-data:
+    driver: local
+  bdo-reports:
+    driver: local
