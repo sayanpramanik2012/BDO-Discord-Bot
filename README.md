@@ -43,7 +43,7 @@ An AI-powered Discord bot that monitors both Korean and Global Labs Black Desert
 ## 📡 Invite Link
 
 ➡️ **Invite the Bot to Your Server:**  
-🔗 [Click Here to Invite the Bot]([https://discord.com/oauth2/authorize?client_id=1402636721279205508](https://discord.com/oauth2/authorize?client_id=1402636721279205508&permissions=8&integration_type=0&scope=bot))
+🔗 [Click Here to Invite the Bot](https://discord.com/oauth2/authorize?client_id=1402636721279205508&permissions=8&integration_type=0&scope=bot)
 
 > Required permissions:  
 > - `Send Messages`  
